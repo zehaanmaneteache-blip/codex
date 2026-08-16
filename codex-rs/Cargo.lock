@@ -1933,7 +1933,7 @@ dependencies = [
  "pretty_assertions",
  "regex-lite",
  "reqwest 0.12.28",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -2109,7 +2109,7 @@ dependencies = [
  "inventory",
  "pretty_assertions",
  "rmcp",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",
@@ -2566,7 +2566,7 @@ dependencies = [
  "pretty_assertions",
  "prost",
  "regex-lite",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_ignored",
  "serde_json",
@@ -3041,7 +3041,7 @@ version = "0.146.1"
 dependencies = [
  "codex-utils-absolute-path",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "ts-rs",
@@ -3082,7 +3082,7 @@ dependencies = [
  "codex-otel",
  "codex-protocol",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "toml 0.9.11+spec-1.1.0",
  "tracing",
@@ -3169,7 +3169,7 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "regex",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "similar",
  "tempfile",
@@ -3236,7 +3236,7 @@ dependencies = [
  "futures",
  "pretty_assertions",
  "regex",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tempfile",
@@ -3296,7 +3296,7 @@ dependencies = [
  "codex-utils-path-uri",
  "http 1.4.0",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tokio",
@@ -3490,7 +3490,7 @@ dependencies = [
  "os_info",
  "pretty_assertions",
  "rmcp",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "shlex",
@@ -3514,7 +3514,7 @@ dependencies = [
  "codex-utils-output-truncation",
  "codex-utils-template",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tempfile",
@@ -3616,7 +3616,7 @@ dependencies = [
  "http 1.4.0",
  "maplit",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "tempfile",
  "toml 0.9.11+spec-1.1.0",
@@ -3791,7 +3791,7 @@ dependencies = [
  "pretty_assertions",
  "quick-xml 0.41.0",
  "reqwest 0.12.28",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "seccompiler",
  "serde",
  "serde_json",
@@ -3957,7 +3957,7 @@ dependencies = [
  "pretty_assertions",
  "rand 0.9.3",
  "regex",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4035,7 +4035,7 @@ dependencies = [
  "codex-utils-string",
  "futures",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tokio",
@@ -4291,7 +4291,7 @@ dependencies = [
  "dirs",
  "dunce",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tempfile",
@@ -4411,7 +4411,7 @@ dependencies = [
  "base64 0.22.1",
  "codex-utils-absolute-path",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -4534,7 +4534,7 @@ dependencies = [
  "codex-tools",
  "http 1.4.0",
  "pretty_assertions",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde_json",
  "url",
 ]
@@ -11594,18 +11594,6 @@ dependencies = [
 
 [[package]]
 name = "schemars"
-version = "0.8.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
-dependencies = [
- "dyn-clone",
- "schemars_derive 0.8.22",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "schemars"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f"
@@ -11625,21 +11613,9 @@ dependencies = [
  "chrono",
  "dyn-clone",
  "ref-cast",
- "schemars_derive 1.2.1",
+ "schemars_derive",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "schemars_derive"
-version = "0.8.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32e265784ad618884abaea0600a9adf15393368d840e0222d101a072f3f7534d"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde_derive_internals",
- "syn 2.0.117",
 ]
 
 [[package]]
