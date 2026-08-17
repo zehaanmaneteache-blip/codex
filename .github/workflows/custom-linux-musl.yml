@@ -1,0 +1,192 @@
+name: custom-linux-musl
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "custom/**"
+    paths:
+      - ".github/actions/setup-rusty-v8/**"
+      - ".github/scripts/install-musl-build-tools.sh"
+      - ".github/scripts/rusty_v8_bazel.py"
+      - ".github/workflows/custom-linux-musl.yml"
+      - "codex-rs/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-linux-musl-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TARGET: x86_64-unknown-linux-musl
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  CARGO_PROFILE_RELEASE_DEBUG: "none"
+  CARGO_PROFILE_RELEASE_STRIP: "symbols"
+  CARGO_TERM_COLOR: always
+  SCCACHE_CACHE_SIZE: 5G
+
+jobs:
+  build:
+    name: Build x86_64 Linux musl
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: codex-rs
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet
+          df -h /
+
+      - name: Install Rust 1.95.0
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+        with:
+          targets: x86_64-unknown-linux-musl
+          components: rustfmt
+
+      - name: Use hermetic Cargo home
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo_home="${GITHUB_WORKSPACE}/.cargo-home"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "$GITHUB_ENV"
+          echo "${cargo_home}/bin" >> "$GITHUB_PATH"
+          : > "${cargo_home}/config.toml"
+
+      - name: Cache Cargo downloads
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            .cargo-home/registry/index/
+            .cargo-home/registry/cache/
+            .cargo-home/git/db/
+          key: cargo-home-${{ runner.os }}-${{ env.TARGET }}-${{ hashFiles('codex-rs/Cargo.lock', 'codex-rs/rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-home-${{ runner.os }}-${{ env.TARGET }}-
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Install sccache
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
+        with:
+          tool: sccache
+          version: 0.7.5
+
+      - name: Configure sccache backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
+            echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+            echo "Using sccache GitHub backend"
+          else
+            echo "SCCACHE_GHA_ENABLED=false" >> "$GITHUB_ENV"
+            echo "SCCACHE_DIR=${GITHUB_WORKSPACE}/.sccache" >> "$GITHUB_ENV"
+            echo "Using sccache local disk + actions/cache fallback"
+          fi
+
+      - name: Enable sccache wrapper
+        shell: bash
+        run: echo "RUSTC_WRAPPER=$(command -v sccache)" >> "$GITHUB_ENV"
+
+      - name: Restore sccache cache
+        if: ${{ env.SCCACHE_GHA_ENABLED != 'true' }}
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ github.workspace }}/.sccache/
+          key: sccache-${{ runner.os }}-${{ env.TARGET }}-release-${{ hashFiles('codex-rs/Cargo.lock', 'codex-rs/rust-toolchain.toml') }}-${{ github.run_id }}
+          restore-keys: |
+            sccache-${{ runner.os }}-${{ env.TARGET }}-release-${{ hashFiles('codex-rs/Cargo.lock', 'codex-rs/rust-toolchain.toml') }}-
+            sccache-${{ runner.os }}-${{ env.TARGET }}-release-
+
+      - name: Install Zig 0.14.0
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.14.0
+          use-cache: false
+
+      - name: Install official musl build tools
+        shell: bash
+        env:
+          APT_INSTALL_ARGS: --no-install-recommends
+          APT_UPDATE_ARGS: -o Acquire::Retries=3
+          DEBIAN_FRONTEND: noninteractive
+        run: bash "${GITHUB_WORKSPACE}/.github/scripts/install-musl-build-tools.sh"
+
+      - name: Disable aws-lc jitter entropy
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "AWS_LC_SYS_NO_JITTER_ENTROPY=1" >> "$GITHUB_ENV"
+          echo "AWS_LC_SYS_NO_JITTER_ENTROPY_x86_64_unknown_linux_musl=1" >> "$GITHUB_ENV"
+
+      - name: Configure official rusty_v8 artifacts
+        uses: ./.github/actions/setup-rusty-v8
+        with:
+          target: x86_64-unknown-linux-musl
+
+      - name: Build bwrap and export its digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --target "$TARGET" --release --bin bwrap
+          bwrap_path="target/${TARGET}/release/bwrap"
+          strip --strip-debug --strip-unneeded "$bwrap_path"
+          digest="$(sha256sum "$bwrap_path" | awk '{print $1}')"
+          echo "CODEX_BWRAP_SHA256=${digest}" >> "$GITHUB_ENV"
+
+      - name: Build Codex
+        shell: bash
+        run: cargo build --locked --target "$TARGET" --release -p codex-cli --bin codex
+
+      - name: Stage and verify artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/codex-custom-${TARGET}"
+          mkdir -p "$dist"
+          install -m 0755 "target/${TARGET}/release/codex" "$dist/codex"
+          install -m 0755 "target/${TARGET}/release/bwrap" "$dist/bwrap"
+          "$dist/codex" --version
+          file "$dist/codex" "$dist/bwrap"
+          (
+            cd "$dist"
+            sha256sum codex bwrap > SHA256SUMS
+            printf 'source_commit=%s\ntarget=%s\nworkflow_run=%s\n' \
+              "$GITHUB_SHA" "$TARGET" "$GITHUB_RUN_ID" > BUILD_INFO
+          )
+
+      - name: Upload current-system build
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codex-custom-x86_64-unknown-linux-musl-${{ github.run_number }}
+          path: ${{ runner.temp }}/codex-custom-x86_64-unknown-linux-musl/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save sccache cache
+        if: always() && !cancelled() && env.SCCACHE_GHA_ENABLED != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ github.workspace }}/.sccache/
+          key: sccache-${{ runner.os }}-${{ env.TARGET }}-release-${{ hashFiles('codex-rs/Cargo.lock', 'codex-rs/rust-toolchain.toml') }}-${{ github.run_id }}
+
+      - name: Show sccache statistics
+        if: always()
+        continue-on-error: true
+        run: sccache --show-stats || true
