@@ -39,6 +39,7 @@ use codex_login::AuthManager;
 use codex_login::CodexAuth;
 use codex_login::default_client::CODEX_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use codex_login::default_client::originator;
+use codex_model_provider::ConfiguredModelCatalog;
 use codex_model_provider::create_model_provider;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_model_provider_info::OPENAI_PROVIDER_ID;
@@ -306,6 +307,7 @@ struct ModelsManagerSource {
     model_provider_id: String,
     model_provider: ModelProviderInfo,
     model_catalog: Option<ModelsResponse>,
+    model_catalog_path: Option<AbsolutePathBuf>,
     codex_home: AbsolutePathBuf,
 }
 
@@ -315,9 +317,20 @@ impl From<&Config> for ModelsManagerSource {
             model_provider_id: config.model_provider_id.clone(),
             model_provider: config.model_provider.clone(),
             model_catalog: config.model_catalog.clone(),
+            model_catalog_path: config.model_catalog_path.clone(),
             codex_home: config.codex_home.clone(),
         }
     }
+}
+
+fn configured_model_catalog(config: &Config) -> Option<ConfiguredModelCatalog> {
+    config
+        .model_catalog
+        .clone()
+        .map(|catalog| match config.model_catalog_path.as_ref() {
+            Some(path) => ConfiguredModelCatalog::persisted(path.to_path_buf(), catalog),
+            None => ConfiguredModelCatalog::in_memory(catalog),
+        })
 }
 
 pub fn build_models_manager(
@@ -327,7 +340,7 @@ pub fn build_models_manager(
     let provider = create_model_provider(config.model_provider.clone(), Some(auth_manager));
     provider.models_manager(
         config.codex_home.to_path_buf(),
-        config.model_catalog.clone(),
+        configured_model_catalog(config),
     )
 }
 
@@ -694,10 +707,10 @@ impl ThreadManager {
         let models_manager = if use_disk_cache {
             provider.models_manager(
                 config.codex_home.to_path_buf(),
-                config.model_catalog.clone(),
+                configured_model_catalog(config),
             )
         } else {
-            provider.models_manager_without_cache(config.model_catalog.clone())
+            provider.models_manager_without_cache(configured_model_catalog(config))
         };
         self.state.models_manager.replace(models_manager).await;
         *current_source = Some(source);

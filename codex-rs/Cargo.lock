@@ -3633,6 +3633,7 @@ dependencies = [
  "codex-otel",
  "codex-protocol",
  "codex-utils-output-truncation",
+ "codex-utils-path",
  "codex-utils-template",
  "pretty_assertions",
  "serde",

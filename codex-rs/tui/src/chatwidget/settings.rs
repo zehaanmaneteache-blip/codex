@@ -210,6 +210,7 @@ impl ChatWidget {
         self.config.model_provider = config.model_provider.clone();
         self.config.model_providers = config.model_providers.clone();
         self.config.model_catalog = config.model_catalog.clone();
+        self.config.model_catalog_path = config.model_catalog_path.clone();
         self.runtime_model_provider_base_url = runtime_model_provider_base_url;
         self.refresh_status_surfaces();
     }

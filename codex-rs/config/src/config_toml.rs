@@ -350,8 +350,8 @@ pub struct ConfigToml {
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
 
-    /// Optional path to a JSON model catalog (applied on startup only).
-    /// Per-thread `config` overrides are accepted but do not reapply this (no-ops).
+    /// Optional path to a persistent JSON model metadata overlay.
+    /// Compatible remote providers preserve existing entries and append newly discovered models.
     pub model_catalog_json: Option<AbsolutePathBuf>,
 
     /// Optionally specify a personality for the model

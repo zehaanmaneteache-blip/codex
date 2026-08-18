@@ -1688,6 +1688,9 @@ impl Session {
                 .model_providers
                 .clone_from(&next_config.model_providers);
             config.model_catalog.clone_from(&next_config.model_catalog);
+            config
+                .model_catalog_path
+                .clone_from(&next_config.model_catalog_path);
             config.mcp_servers = next_config.mcp_servers.clone();
             config.mcp_oauth_credentials_store_mode = next_config.mcp_oauth_credentials_store_mode;
             if let Err(err) = config.features.set_enabled(

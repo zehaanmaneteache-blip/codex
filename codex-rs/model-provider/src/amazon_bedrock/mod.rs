@@ -20,10 +20,10 @@ use codex_models_manager::manager::StaticModelsManager;
 use codex_protocol::account::ProviderAccount;
 use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result;
-use codex_protocol::openai_models::ModelsResponse;
 
 use crate::auth::auth_manager_for_provider;
 use crate::auth::resolve_provider_auth as resolve_configured_provider_auth;
+use crate::provider::ConfiguredModelCatalog;
 use crate::provider::ModelProvider;
 use crate::provider::ModelProviderFuture;
 use crate::provider::ProviderAccountResult;
@@ -180,21 +180,25 @@ impl ModelProvider for AmazonBedrockModelProvider {
     fn models_manager(
         &self,
         _codex_home: PathBuf,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> SharedModelsManager {
         Arc::new(StaticModelsManager::new(
             /*auth_manager*/ None,
-            config_model_catalog.map_or_else(static_model_catalog, with_default_only_service_tier),
+            config_model_catalog
+                .map(ConfiguredModelCatalog::into_catalog)
+                .map_or_else(static_model_catalog, with_default_only_service_tier),
         ))
     }
 
     fn models_manager_without_cache(
         &self,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> SharedModelsManager {
         Arc::new(StaticModelsManager::new(
             /*auth_manager*/ None,
-            config_model_catalog.map_or_else(static_model_catalog, with_default_only_service_tier),
+            config_model_catalog
+                .map(ConfiguredModelCatalog::into_catalog)
+                .map_or_else(static_model_catalog, with_default_only_service_tier),
         ))
     }
 }

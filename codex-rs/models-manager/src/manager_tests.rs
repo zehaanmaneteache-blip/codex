@@ -239,6 +239,41 @@ async fn manager_without_cache_fetches_on_every_refresh() {
     assert_eq!(endpoint.fetch_count(), 2);
 }
 
+#[tokio::test]
+async fn catalog_overlay_preserves_metadata_and_persists_discovered_models() {
+    let codex_home = tempdir().expect("temp dir");
+    let catalog_path = codex_home.path().join("catalog.json");
+    let mut configured_model = remote_model("configured", "Configured", /*priority*/ 0);
+    configured_model.context_window = Some(1_050_000);
+    configured_model.max_context_window = Some(1_050_000);
+    let discovered_model = remote_model("discovered", "Discovered", /*priority*/ 1);
+    let endpoint = TestModelsEndpoint::new(vec![vec![discovered_model.clone()]]);
+    let manager = OpenAiModelsManager::new_without_cache_with_catalog_overlay(
+        endpoint,
+        Some(AuthManager::from_auth_for_testing(
+            CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+        )),
+        catalog_path.clone(),
+        ModelsResponse {
+            models: vec![configured_model.clone()],
+        },
+    );
+
+    let catalog = manager
+        .raw_model_catalog(RefreshStrategy::Online, DEFAULT_HTTP_CLIENT_FACTORY)
+        .await;
+
+    assert_eq!(
+        catalog.models,
+        vec![configured_model.clone(), discovered_model.clone()]
+    );
+    let persisted: ModelsResponse = serde_json::from_str(
+        &std::fs::read_to_string(catalog_path).expect("catalog overlay should be written"),
+    )
+    .expect("persisted catalog should be valid JSON");
+    assert_eq!(persisted.models, catalog.models);
+}
+
 async fn chatgpt_auth_tokens_for_tests(codex_home: &Path) -> CodexAuth {
     let auth_dot_json = codex_login::AuthDotJson {
         auth_mode: Some(AuthMode::ChatgptAuthTokens),

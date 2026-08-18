@@ -292,6 +292,10 @@ impl ConfigRequestProcessor {
     }
 
     async fn reload_user_config(&self) {
+        self.thread_manager
+            .auth_manager()
+            .reload_api_key_auth()
+            .await;
         let latest_config = match self.load_latest_config(/*fallback_cwd*/ None).await {
             Ok(config) => config,
             Err(err) => {

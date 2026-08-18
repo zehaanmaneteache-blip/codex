@@ -933,6 +933,7 @@ async fn fork_injects_changed_agents_md_once() -> Result<()> {
     fork_config.model = parent.config.model.clone();
     fork_config.model_provider = parent.config.model_provider.clone();
     fork_config.model_catalog = parent.config.model_catalog.clone();
+    fork_config.model_catalog_path = parent.config.model_catalog_path.clone();
     fork_config.codex_self_exe = parent.config.codex_self_exe.clone();
     let forked = parent
         .thread_manager

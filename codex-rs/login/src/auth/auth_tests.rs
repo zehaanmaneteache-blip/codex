@@ -893,6 +893,51 @@ async fn loads_api_key_from_auth_json() {
     assert!(auth.get_token_data().is_err());
 }
 
+#[tokio::test]
+#[serial(codex_auth_env)]
+async fn reload_api_key_auth_observes_external_auth_json_edit() {
+    let dir = tempdir().unwrap();
+    let _access_token_guard = remove_access_token_env_var();
+    super::login_with_api_key(
+        dir.path(),
+        "sk-old",
+        AuthCredentialsStoreMode::File,
+        AuthKeyringBackendKind::Direct,
+    )
+    .expect("initial API key should be written");
+    let manager = AuthManager::shared(
+        dir.path().to_path_buf(),
+        /*enable_codex_api_key_env*/ false,
+        AuthCredentialsStoreMode::File,
+        /*forced_chatgpt_workspace_id*/ None,
+        /*chatgpt_base_url*/ None,
+        AuthKeyringBackendKind::Direct,
+        crate::test_support::transport_default_auth_route_config(),
+    )
+    .await;
+    assert_eq!(
+        manager
+            .auth_cached()
+            .and_then(|auth| auth.api_key().map(str::to_string)),
+        Some("sk-old".to_string())
+    );
+
+    super::login_with_api_key(
+        dir.path(),
+        "sk-new",
+        AuthCredentialsStoreMode::File,
+        AuthKeyringBackendKind::Direct,
+    )
+    .expect("updated API key should be written");
+    assert!(manager.reload_api_key_auth().await);
+    assert_eq!(
+        manager
+            .auth_cached()
+            .and_then(|auth| auth.api_key().map(str::to_string)),
+        Some("sk-new".to_string())
+    );
+}
+
 #[test]
 fn logout_removes_auth_file() -> Result<(), std::io::Error> {
     let dir = tempdir()?;

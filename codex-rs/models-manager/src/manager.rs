@@ -1,4 +1,5 @@
 use super::cache::ModelsCacheManager;
+use crate::catalog_overlay::ModelCatalogOverlay;
 use crate::collaboration_mode_presets::builtin_collaboration_mode_presets;
 use crate::config::ModelsManagerConfig;
 use crate::model_info;
@@ -221,6 +222,7 @@ pub struct OpenAiModelsManager {
     remote_models: RwLock<Vec<ModelInfo>>,
     etag: RwLock<Option<String>>,
     cache_manager: Option<ModelsCacheManager>,
+    catalog_overlay: Option<ModelCatalogOverlay>,
     endpoint_client: SharedModelsEndpointClient,
     auth_manager: Option<Arc<AuthManager>>,
 }
@@ -268,6 +270,25 @@ impl OpenAiModelsManager {
             Some(ModelsCacheManager::new(cache_path, DEFAULT_MODEL_CACHE_TTL)),
             endpoint_client,
             auth_manager,
+            /*initial_models*/ None,
+            /*catalog_overlay*/ None,
+        )
+    }
+
+    pub fn new_with_catalog_overlay(
+        codex_home: PathBuf,
+        endpoint_client: Arc<dyn ModelsEndpointClient>,
+        auth_manager: Option<Arc<AuthManager>>,
+        catalog_path: PathBuf,
+        catalog: ModelsResponse,
+    ) -> Self {
+        let cache_path = codex_home.join(MODEL_CACHE_FILE);
+        Self::new_with_cache_manager(
+            Some(ModelsCacheManager::new(cache_path, DEFAULT_MODEL_CACHE_TTL)),
+            endpoint_client,
+            auth_manager,
+            Some(catalog.models),
+            Some(ModelCatalogOverlay::new(catalog_path)),
         )
     }
 
@@ -276,19 +297,44 @@ impl OpenAiModelsManager {
         endpoint_client: Arc<dyn ModelsEndpointClient>,
         auth_manager: Option<Arc<AuthManager>>,
     ) -> Self {
-        Self::new_with_cache_manager(/*cache_manager*/ None, endpoint_client, auth_manager)
+        Self::new_with_cache_manager(
+            /*cache_manager*/ None,
+            endpoint_client,
+            auth_manager,
+            /*initial_models*/ None,
+            /*catalog_overlay*/ None,
+        )
+    }
+
+    pub fn new_without_cache_with_catalog_overlay(
+        endpoint_client: Arc<dyn ModelsEndpointClient>,
+        auth_manager: Option<Arc<AuthManager>>,
+        catalog_path: PathBuf,
+        catalog: ModelsResponse,
+    ) -> Self {
+        Self::new_with_cache_manager(
+            /*cache_manager*/ None,
+            endpoint_client,
+            auth_manager,
+            Some(catalog.models),
+            Some(ModelCatalogOverlay::new(catalog_path)),
+        )
     }
 
     fn new_with_cache_manager(
         cache_manager: Option<ModelsCacheManager>,
         endpoint_client: Arc<dyn ModelsEndpointClient>,
         auth_manager: Option<Arc<AuthManager>>,
+        initial_models: Option<Vec<ModelInfo>>,
+        catalog_overlay: Option<ModelCatalogOverlay>,
     ) -> Self {
-        let remote_models = load_remote_models_from_file().unwrap_or_default();
+        let remote_models =
+            initial_models.unwrap_or_else(|| load_remote_models_from_file().unwrap_or_default());
         Self {
             remote_models: RwLock::new(remote_models),
             etag: RwLock::new(None),
             cache_manager,
+            catalog_overlay,
             endpoint_client,
             auth_manager,
         }
@@ -476,7 +522,7 @@ impl OpenAiModelsManager {
             .endpoint_client
             .list_models(&client_version, http_client_factory.clone())
             .await?;
-        self.apply_remote_models(models.clone()).await;
+        let models = self.apply_remote_models(models).await;
         *self.etag.write().await = etag.clone();
         if let Some(cache_manager) = self.cache_manager.as_ref() {
             cache_manager
@@ -495,7 +541,20 @@ impl OpenAiModelsManager {
     }
 
     /// Replace the cached remote models and rebuild the derived presets list.
-    async fn apply_remote_models(&self, models: Vec<ModelInfo>) {
+    async fn apply_remote_models(&self, models: Vec<ModelInfo>) -> Vec<ModelInfo> {
+        if let Some(catalog_overlay) = self.catalog_overlay.as_ref() {
+            let (merged, changed) = {
+                let mut current = self.remote_models.write().await;
+                let (merged, changed) = catalog_overlay.merge_discovered(&current, models);
+                *current = merged.clone();
+                (merged, changed)
+            };
+            if changed && let Err(err) = catalog_overlay.persist(merged.clone()) {
+                error!("failed to persist discovered models to configured catalog: {err}");
+            }
+            return merged;
+        }
+
         // Use the remote models list as the source of truth if it contains at least one
         // non-hidden model and the user is using ChatGPT auth.
         let should_use_remote_models_only = !models.is_empty()
@@ -509,8 +568,8 @@ impl OpenAiModelsManager {
                         .is_some_and(AuthMode::has_chatgpt_account)
                 }));
         if should_use_remote_models_only {
-            *self.remote_models.write().await = models;
-            return;
+            *self.remote_models.write().await = models.clone();
+            return models;
         }
 
         let mut existing_models = load_remote_models_from_file().unwrap_or_default();
@@ -524,7 +583,8 @@ impl OpenAiModelsManager {
                 existing_models.push(model);
             }
         }
-        *self.remote_models.write().await = existing_models;
+        *self.remote_models.write().await = existing_models.clone();
+        existing_models
     }
 
     /// Attempt to satisfy the refresh from the cache when it matches the provider and TTL.
@@ -547,7 +607,7 @@ impl OpenAiModelsManager {
         };
         let models = cache.models.clone();
         *self.etag.write().await = cache.etag.clone();
-        self.apply_remote_models(models.clone()).await;
+        let models = self.apply_remote_models(models).await;
         info!(
             models_count = models.len(),
             etag = ?cache.etag,

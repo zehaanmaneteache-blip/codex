@@ -12,6 +12,7 @@ use codex_git_utils::diff_since_latest_init;
 use codex_git_utils::reset_git_repository;
 use codex_login::AuthManager;
 use codex_login::CodexAuth;
+use codex_model_provider::ConfiguredModelCatalog;
 use codex_model_provider::ModelProvider;
 use codex_model_provider::ModelProviderFuture;
 use codex_model_provider::ProviderAccountResult;
@@ -22,7 +23,6 @@ use codex_protocol::ThreadId;
 use codex_protocol::config_types::ServiceTier;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
-use codex_protocol::openai_models::ModelsResponse;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::Op;
@@ -694,7 +694,7 @@ impl ModelProvider for MockMemoryModelProvider {
     fn models_manager(
         &self,
         codex_home: PathBuf,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> codex_models_manager::manager::SharedModelsManager {
         self.delegate
             .models_manager(codex_home, config_model_catalog)

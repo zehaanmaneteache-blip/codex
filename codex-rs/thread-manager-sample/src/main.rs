@@ -275,6 +275,7 @@ fn new_config(model: Option<String>, arg0_paths: Arg0DispatchPaths) -> anyhow::R
         plan_mode_reasoning_effort: None,
         model_reasoning_summary: None,
         model_catalog: None,
+        model_catalog_path: None,
         model_verbosity: None,
         chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
         respect_system_proxy: false,

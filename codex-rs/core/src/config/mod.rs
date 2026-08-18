@@ -964,9 +964,12 @@ pub struct Config {
     /// using the Responses API. When unset, the model catalog default is used.
     pub model_reasoning_summary: Option<ReasoningSummary>,
 
-    /// Optional full model catalog loaded from `model_catalog_json`.
-    /// When set, this replaces the bundled catalog for the current process.
+    /// Optional model metadata overlay loaded from `model_catalog_json`.
     pub model_catalog: Option<ModelsResponse>,
+
+    /// Path backing `model_catalog`; compatible remote providers append newly discovered models
+    /// to this file while preserving metadata for existing entries.
+    pub model_catalog_path: Option<AbsolutePathBuf>,
 
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
@@ -3853,7 +3856,8 @@ impl Config {
         let review_model = override_review_model.or(cfg.review_model);
 
         let check_for_update_on_startup = cfg.check_for_update_on_startup.unwrap_or(true);
-        let model_catalog = load_model_catalog(cfg.model_catalog_json.clone())?;
+        let model_catalog_path = cfg.model_catalog_json.clone();
+        let model_catalog = load_model_catalog(model_catalog_path.clone())?;
 
         let log_dir = cfg
             .log_dir
@@ -4108,6 +4112,7 @@ impl Config {
             plan_mode_reasoning_effort: cfg.plan_mode_reasoning_effort,
             model_reasoning_summary: cfg.model_reasoning_summary,
             model_catalog,
+            model_catalog_path,
             model_verbosity: cfg.model_verbosity,
             chatgpt_base_url: cfg
                 .chatgpt_base_url

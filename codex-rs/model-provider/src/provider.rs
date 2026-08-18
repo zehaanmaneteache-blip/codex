@@ -54,6 +54,37 @@ pub struct ProviderAccountState {
     pub requires_openai_auth: bool,
 }
 
+/// Model catalog supplied by configuration, optionally backed by a persistent JSON overlay.
+#[derive(Debug, Clone)]
+pub struct ConfiguredModelCatalog {
+    catalog: ModelsResponse,
+    path: Option<PathBuf>,
+}
+
+impl ConfiguredModelCatalog {
+    pub fn in_memory(catalog: ModelsResponse) -> Self {
+        Self {
+            catalog,
+            path: None,
+        }
+    }
+
+    pub fn persisted(path: PathBuf, catalog: ModelsResponse) -> Self {
+        Self {
+            catalog,
+            path: Some(path),
+        }
+    }
+
+    fn into_parts(self) -> (ModelsResponse, Option<PathBuf>) {
+        (self.catalog, self.path)
+    }
+
+    pub(crate) fn into_catalog(self) -> ModelsResponse {
+        self.catalog
+    }
+}
+
 /// Error returned when a provider cannot construct its app-visible account state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderAccountError {
@@ -197,7 +228,7 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
     fn models_manager(
         &self,
         codex_home: PathBuf,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> SharedModelsManager;
 
     /// Creates a model manager with caching disabled.
@@ -206,9 +237,10 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
     /// authoritative in-memory catalog so hosted callers cannot accidentally write to disk.
     fn models_manager_without_cache(
         &self,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> SharedModelsManager {
         let model_catalog = config_model_catalog
+            .map(ConfiguredModelCatalog::into_catalog)
             .or_else(|| codex_models_manager::bundled_models_response().ok())
             .unwrap_or_default();
         Arc::new(StaticModelsManager::new(self.auth_manager(), model_catalog))
@@ -328,10 +360,23 @@ impl ModelProvider for ConfiguredModelProvider {
     fn models_manager(
         &self,
         codex_home: PathBuf,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> SharedModelsManager {
-        match config_model_catalog {
-            Some(model_catalog) => Arc::new(StaticModelsManager::new(
+        match config_model_catalog.map(ConfiguredModelCatalog::into_parts) {
+            Some((model_catalog, Some(catalog_path))) => {
+                let endpoint = Arc::new(OpenAiModelsEndpoint::new(
+                    self.info.clone(),
+                    self.auth_manager.clone(),
+                ));
+                Arc::new(OpenAiModelsManager::new_with_catalog_overlay(
+                    codex_home,
+                    endpoint,
+                    self.auth_manager.clone(),
+                    catalog_path,
+                    model_catalog,
+                ))
+            }
+            Some((model_catalog, None)) => Arc::new(StaticModelsManager::new(
                 self.auth_manager.clone(),
                 model_catalog,
             )),
@@ -351,10 +396,22 @@ impl ModelProvider for ConfiguredModelProvider {
 
     fn models_manager_without_cache(
         &self,
-        config_model_catalog: Option<ModelsResponse>,
+        config_model_catalog: Option<ConfiguredModelCatalog>,
     ) -> SharedModelsManager {
-        match config_model_catalog {
-            Some(model_catalog) => Arc::new(StaticModelsManager::new(
+        match config_model_catalog.map(ConfiguredModelCatalog::into_parts) {
+            Some((model_catalog, Some(catalog_path))) => {
+                let endpoint = Arc::new(OpenAiModelsEndpoint::new(
+                    self.info.clone(),
+                    self.auth_manager.clone(),
+                ));
+                Arc::new(OpenAiModelsManager::new_without_cache_with_catalog_overlay(
+                    endpoint,
+                    self.auth_manager.clone(),
+                    catalog_path,
+                    model_catalog,
+                ))
+            }
+            Some((model_catalog, None)) => Arc::new(StaticModelsManager::new(
                 self.auth_manager.clone(),
                 model_catalog,
             )),
@@ -770,9 +827,9 @@ mod tests {
         );
         let manager = provider.models_manager(
             test_codex_home(),
-            Some(ModelsResponse {
+            Some(ConfiguredModelCatalog::in_memory(ModelsResponse {
                 models: vec![configured_model],
-            }),
+            })),
         );
 
         let catalog = manager

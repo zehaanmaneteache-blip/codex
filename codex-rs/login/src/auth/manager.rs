@@ -2112,6 +2112,32 @@ impl AuthManager {
         self.set_cached_auth(new_auth)
     }
 
+    /// Reload API-key authentication from the active store without switching between managed
+    /// ChatGPT identities. This supports editing an API key while Codex remains running.
+    pub async fn reload_api_key_auth(&self) -> bool {
+        if self.has_external_auth() {
+            return false;
+        }
+
+        let current_auth = self.auth_cached();
+        let new_auth = self.load_auth().await;
+        let current_is_api_key = current_auth
+            .as_ref()
+            .is_some_and(|auth| auth.api_auth_mode() == AuthMode::ApiKey);
+        let new_is_api_key = new_auth
+            .as_ref()
+            .is_some_and(|auth| auth.api_auth_mode() == AuthMode::ApiKey);
+        // A managed ChatGPT or Bedrock identity must remain the active identity. API-key auth
+        // may be introduced while unauthenticated, rotated while active, or removed while active.
+        let can_reload = (current_auth.is_none() && new_is_api_key)
+            || (current_is_api_key && (new_is_api_key || new_auth.is_none()));
+        if !can_reload {
+            return false;
+        }
+
+        self.set_cached_auth(new_auth)
+    }
+
     async fn reload_if_account_id_matches(
         &self,
         expected_account_id: Option<&str>,

@@ -1494,7 +1494,7 @@ async fn injected_models_manager_controls_refresh_policy() {
         config.model_provider.clone(),
         Some(Arc::clone(&auth_manager)),
     );
-    let models_manager = provider.models_manager_without_cache(config.model_catalog.clone());
+    let models_manager = provider.models_manager_without_cache(configured_model_catalog(&config));
     let manager = ThreadManager::new(
         &config,
         auth_manager,

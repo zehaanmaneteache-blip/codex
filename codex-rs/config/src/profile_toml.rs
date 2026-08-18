@@ -36,7 +36,8 @@ pub struct ConfigProfile {
     pub plan_mode_reasoning_effort: Option<ReasoningEffort>,
     pub model_reasoning_summary: Option<ReasoningSummary>,
     pub model_verbosity: Option<Verbosity>,
-    /// Optional path to a JSON model catalog (applied on startup only).
+    /// Optional path to a persistent JSON model metadata overlay.
+    /// Compatible remote providers preserve existing entries and append newly discovered models.
     pub model_catalog_json: Option<AbsolutePathBuf>,
     pub personality: Option<Personality>,
     pub chatgpt_base_url: Option<String>,
