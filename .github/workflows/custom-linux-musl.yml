@@ -81,7 +81,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Install sccache
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
         with:
           tool: sccache
           version: 0.7.5
